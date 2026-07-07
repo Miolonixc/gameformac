@@ -1,7 +1,7 @@
 .build/
 .swiftpm/
-.build/arm64-apple-macosx/
 .DS_Store
 xcuserdata/
 DerivedData/
 *.xcuserstate
+*.app/

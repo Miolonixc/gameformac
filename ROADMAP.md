@@ -32,10 +32,11 @@
 - [ ] **Haptic feedback** — subtle vibration on drop/clear (via trackpad)
 
 ## v1.2 — Visual Upgrade
+- [x] **Active piece glow** — brighter gradient + thicker stroke on current piece
+- [x] **Line clear animation** — flash white + scale up on cleared rows
+- [x] **Hard drop shake** — board shakes briefly on hard drop
 - [ ] **Tetromino glow effects** — animated neon glow around active pieces
-- [ ] **Line clear animation** — flash + dissolve effect
 - [ ] **Garbage warning** — red flash when opponent sends garbage
-- [ ] **Combo counter** — animated multiplier display
 - [ ] **Background music** — ambient electronic soundtrack
 - [ ] **Particle system** — sparks on hard drop, shatter on line clear
 - [ ] **Board grid lines** — subtle grid overlay for better visual structure

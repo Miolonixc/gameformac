@@ -277,7 +277,7 @@ class GameBoard: ObservableObject, Codable {
     // MARK: - Lock Delay
 
     func tickLockDelay(_ dt: TimeInterval) {
-        guard isLocking, let piece = currentPiece else { return }
+        guard isLocking, let _ = currentPiece else { return }
         lockDelay += dt
         if lockDelay >= GameConstants.lockDelay {
             stats.piecesPlaced += 1

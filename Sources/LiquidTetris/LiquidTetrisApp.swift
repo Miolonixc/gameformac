@@ -28,7 +28,7 @@ struct LiquidTetrisApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.theme, theme)
-                .frame(minWidth: 900, minHeight: 750)
+                .frame(minWidth: 700, minHeight: 620)
                 .background(WindowAccessor { window in
                     window.makeKeyAndOrderFront(nil)
                     NSApp.activate(ignoringOtherApps: true)
@@ -37,6 +37,6 @@ struct LiquidTetrisApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
-        .defaultSize(width: 1000, height: 750)
+        .defaultSize(width: 820, height: 680)
     }
 }

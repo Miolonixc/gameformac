@@ -64,7 +64,15 @@
 - [ ] **Reconnection** — handle Wi-Fi drops gracefully
 - [ ] **Replay system** — record and playback matches
 - [ ] **Anti-cheat** — validate board state server-side
-- [ ] **Cross-platform** — iOS companion app via shared Swift package
+
+## v1.6 — Cross-Platform
+- [ ] **iOS companion app** — shared Swift package, same codebase
+- [ ] **iPad optimizations** — larger touch targets, gesture controls
+- [ ] **Universal binary** — macOS + iOS in one build via Xcode project
+- [ ] **CloudKit sync** — sync scores, themes, settings across devices
+- [ ] **Handoff** — start game on Mac, continue on iPhone
+- [ ] **iMessage integration** — send game invites via Messages
+- [ ] **watchOS companion** — score notifications, quick play mode
 
 ## v2.0 — Ecosystem
 - [ ] **Custom themes** — user-created color palettes and backgrounds

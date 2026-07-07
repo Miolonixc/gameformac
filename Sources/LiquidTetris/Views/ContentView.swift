@@ -68,7 +68,7 @@ struct GamePlayView: View {
                         }
                     }
                 }
-                .padding(40)
+                .padding(24)
             }
 
             // Pause Overlay

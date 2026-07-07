@@ -47,6 +47,10 @@ class GameBoard: ObservableObject, Codable {
     @Published var hardDropFlash: Bool = false
     @Published var lineClearRows: Set<Int> = []
     @Published var lineClearFlash: Bool = false
+    @Published var dropImpactCol: Int = -1
+    @Published var dropImpactColor: Color = .clear
+    @Published var justLockedCells: [(row: Int, col: Int)] = []
+    @Published var clearingCol: Int = -1
 
     let rows = GameConstants.rows
     let cols = GameConstants.cols
@@ -222,16 +226,34 @@ class GameBoard: ObservableObject, Codable {
     }
 
     func hardDrop() {
+        guard let piece = currentPiece else { return }
+
+        // Calculate impact column (center of piece)
+        let shape = piece.cells
+        var minC = cols, maxC = 0
+        for r in 0..<shape.count {
+            for c in 0..<shape[r].count {
+                if shape[r][c] == 1 {
+                    minC = min(minC, piece.col + c)
+                    maxC = max(maxC, piece.col + c)
+                }
+            }
+        }
+        let impactCol = (minC + maxC) / 2
+
         var dropCount = 0
         while moveDown() {
             dropCount += 1
         }
         stats.piecesPlaced += 1
 
-        // Hard drop flash animation
+        // Impact ring animation
+        dropImpactCol = impactCol
+        dropImpactColor = piece.type.color
         hardDropFlash = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             self?.hardDropFlash = false
+            self?.dropImpactCol = -1
         }
 
         lockPiece()
@@ -274,6 +296,7 @@ class GameBoard: ObservableObject, Codable {
     func lockPiece() {
         guard let piece = currentPiece else { return }
         let shape = piece.cells
+        var lockedCells: [(row: Int, col: Int)] = []
         for r in 0..<shape.count {
             for c in 0..<shape[r].count {
                 if shape[r][c] == 1 {
@@ -281,10 +304,18 @@ class GameBoard: ObservableObject, Codable {
                     let newC = piece.col + c
                     if newR >= 0 && newR < rows && newC >= 0 && newC < cols {
                         grid[newR][newC] = Cell(filled: true, color: piece.type)
+                        lockedCells.append((row: newR, col: newC))
                     }
                 }
             }
         }
+
+        // Lock flash animation
+        justLockedCells = lockedCells
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.justLockedCells = []
+        }
+
         let cleared = clearLines()
         updateScore(lines: cleared)
 
@@ -314,20 +345,35 @@ class GameBoard: ObservableObject, Codable {
 
         guard !clearedRows.isEmpty else { return 0 }
 
-        // Line clear flash animation
+        // Start cascade clear animation
         lineClearRows = Set(clearedRows)
+        clearingCol = 0
         lineClearFlash = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.lineClearFlash = false
-            self?.lineClearRows = []
+        // Cascade: clear column by column from left to right
+        let totalCols = cols
+        var col = 0
+        func clearNextCol() {
+            if col < totalCols {
+                clearingCol = col
+                col += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                    clearNextCol()
+                }
+            } else {
+                // Actually remove the rows after cascade finishes
+                for row in clearedRows.sorted().reversed() {
+                    grid.remove(at: row)
+                    grid.insert(Array(repeating: Cell.empty, count: self.cols), at: 0)
+                }
+                linesCleared += clearedRows.count
+                clearingCol = -1
+                lineClearFlash = false
+                lineClearRows = []
+            }
         }
+        clearNextCol()
 
-        for row in clearedRows {
-            grid.remove(at: row)
-            grid.insert(Array(repeating: Cell.empty, count: cols), at: 0)
-        }
-        linesCleared += clearedRows.count
         return clearedRows.count
     }
 

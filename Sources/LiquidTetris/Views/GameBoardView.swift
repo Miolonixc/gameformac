@@ -6,139 +6,182 @@ struct GameBoardView: View {
     var label: String = ""
     @Environment(\.theme) var theme
     @State private var dropShake: CGFloat = 0
+    @State private var ringScales: [CGFloat] = [0, 0, 0]
+    @State private var ringOpacities: [Double] = [0, 0, 0]
+
+    private let cellSize = GameConstants.cellSize
 
     var body: some View {
-        let c = theme.colors
         GlassPanel(cornerRadius: 20) {
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    if !label.isEmpty {
-                        Text(label)
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(c.textSecondary)
-                            .textCase(.uppercase)
-                    }
-                    Spacer()
-                    Text("\(board.score)")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundStyle(c.textPrimary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-
-                // Board grid
-                VStack(spacing: 0) {
-                    ForEach(0..<board.rows, id: \.self) { row in
-                        HStack(spacing: 0) {
-                            ForEach(0..<board.cols, id: \.self) { col in
-                                let cell = board.grid[row][col]
-                                let ghostPos = isPlayer ? board.ghostPosition() : nil
-                                let isGhost = isPlayer && ghostPos != nil && !cell.filled &&
-                                    isGhostCell(row: row, col: col, ghostRow: ghostPos!.row, ghostCol: ghostPos!.col)
-                                let isCurrentPiece = isPlayer && isCurrentPieceCell(row: row, col: col)
-                                let isLineClearing = board.lineClearRows.contains(row)
-
-                                GlassCell(
-                                    color: ghostPos != nil && isGhost
-                                        ? board.currentPiece?.type.color
-                                        : cell.color?.color,
-                                    filled: cell.filled,
-                                    isGhost: isGhost && !cell.filled,
-                                    isActive: isCurrentPiece,
-                                    isClearing: isLineClearing
-                                )
-                            }
-                        }
-                    }
-                }
-                .padding(4)
-                .offset(y: dropShake)
-                .onChange(of: board.hardDropFlash) { _, flash in
-                    if flash {
-                        withAnimation(.easeOut(duration: 0.04)) {
-                            dropShake = 4
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
-                            withAnimation(.easeInOut(duration: 0.08)) {
-                                dropShake = -2
-                            }
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                            withAnimation(.easeOut(duration: 0.1)) {
-                                dropShake = 0
-                            }
-                        }
-                    }
-                }
-
-                // Bottom stats
-                HStack {
-                    VStack(spacing: 4) {
-                        Text("QUEUE")
-                            .font(.system(size: 8, weight: .medium, design: .rounded))
-                            .foregroundStyle(c.textSecondary)
-                            .textCase(.uppercase)
-                        VStack(spacing: 6) {
-                            ForEach(0..<min(3, board.pieceQueue.count), id: \.self) { i in
-                                PreviewPiece(type: board.pieceQueue[i], cellSize: 12)
-                            }
-                        }
-                    }
-
-                    Spacer()
-
-                    VStack(spacing: 4) {
-                        Text("LEVEL")
-                            .font(.system(size: 8, weight: .medium, design: .rounded))
-                            .foregroundStyle(c.textSecondary)
-                            .textCase(.uppercase)
-                        Text("\(board.level)")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundStyle(c.textPrimary)
-                    }
-
-                    Spacer()
-
-                    VStack(spacing: 4) {
-                        Text("LINES")
-                            .font(.system(size: 8, weight: .medium, design: .rounded))
-                            .foregroundStyle(c.textSecondary)
-                            .textCase(.uppercase)
-                        Text("\(board.linesCleared)")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundStyle(c.textPrimary)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-                .padding(.top, 6)
+                headerView
+                boardGrid
+                bottomStats
             }
         }
         .frame(
-            width: CGFloat(GameConstants.cols) * GameConstants.cellSize + 32,
-            height: CGFloat(GameConstants.rows) * GameConstants.cellSize + 120
+            width: CGFloat(GameConstants.cols) * cellSize + 32,
+            height: CGFloat(GameConstants.rows) * cellSize + 100
         )
-        .overlay(
-            Group {
-                if board.isGameOver {
-                    ZStack {
-                        c.overlayBackground
-                        VStack(spacing: 12) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 40))
-                                .foregroundStyle(c.accentRed)
-                            Text("GAME OVER")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundStyle(c.textPrimary)
-                        }
+        .overlay(gameOverOverlay)
+        .overlay(comboOverlay, alignment: .topTrailing)
+    }
+
+    // MARK: - Header
+
+    private var headerView: some View {
+        let c = theme.colors
+        return HStack {
+            if !label.isEmpty {
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(c.textSecondary)
+                    .textCase(.uppercase)
+            }
+            Spacer()
+            Text("\(board.score)")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundStyle(c.textPrimary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Board Grid
+
+    private var boardGrid: some View {
+        return VStack(spacing: 0) {
+            ForEach(0..<board.rows, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<board.cols, id: \.self) { col in
+                        cellView(row: row, col: col)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
             }
+        }
+        .padding(4)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(impactRingsOverlay)
+        .offset(y: dropShake)
+        .onChange(of: board.hardDropFlash) { _, flash in
+            guard flash else { return }
+            triggerDropEffects()
+        }
+    }
+
+    // MARK: - Cell
+
+    @ViewBuilder
+    private func cellView(row: Int, col: Int) -> some View {
+        let cell = board.grid[row][col]
+        let ghostPos = isPlayer ? board.ghostPosition() : nil
+        let ghost = isGhost(row: row, col: col, ghostPos: ghostPos)
+        let current = isCurrent(row: row, col: col)
+        let clearing = board.clearingCol >= 0 && board.lineClearRows.contains(row) && col <= board.clearingCol
+        let locked = isJustLocked(row: row, col: col)
+
+        GlassCell(
+            color: cellColor(cell: cell, ghostPos: ghostPos, current: current, ghost: ghost),
+            filled: cell.filled || current,
+            isGhost: ghost && !cell.filled,
+            isActive: current,
+            isClearing: clearing,
+            isJustLocked: locked
         )
-        .overlay(alignment: .topTrailing) {
+    }
+
+    // MARK: - Impact Rings
+
+    private var impactRingsOverlay: some View {
+        let boardHeight = CGFloat(GameConstants.rows) * cellSize
+        return GeometryReader { geo in
+            if board.dropImpactCol >= 0 {
+                let x = CGFloat(board.dropImpactCol) * cellSize + cellSize / 2 + 4
+                let y = boardHeight / 2 + 4
+                let color = board.dropImpactColor
+                ZStack {
+                    ForEach(0..<3, id: \.self) { i in
+                        let scale = ringScales[safe: i] ?? 0
+                        let opacity = ringOpacities[safe: i] ?? 0
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(color.opacity(opacity), lineWidth: 2)
+                            .frame(width: 30 + scale * 120, height: 30 + scale * 120)
+                            .position(x: x, y: y)
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    // MARK: - Bottom Stats
+
+    private var bottomStats: some View {
+        let c = theme.colors
+        return HStack {
+            VStack(spacing: 4) {
+                Text("QUEUE")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(c.textSecondary)
+                    .textCase(.uppercase)
+                VStack(spacing: 6) {
+                    ForEach(0..<min(3, board.pieceQueue.count), id: \.self) { i in
+                        PreviewPiece(type: board.pieceQueue[i], cellSize: 12)
+                    }
+                }
+            }
+            Spacer()
+            VStack(spacing: 4) {
+                Text("LEVEL")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(c.textSecondary)
+                    .textCase(.uppercase)
+                Text("\(board.level)")
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundStyle(c.textPrimary)
+            }
+            Spacer()
+            VStack(spacing: 4) {
+                Text("LINES")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(c.textSecondary)
+                    .textCase(.uppercase)
+                Text("\(board.linesCleared)")
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundStyle(c.textPrimary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .padding(.top, 6)
+    }
+
+    // MARK: - Overlays
+
+    private var gameOverOverlay: some View {
+        let c = theme.colors
+        return Group {
+            if board.isGameOver {
+                ZStack {
+                    c.overlayBackground
+                    VStack(spacing: 12) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(c.accentRed)
+                        Text("GAME OVER")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(c.textPrimary)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+            }
+        }
+    }
+
+    private var comboOverlay: some View {
+        let c = theme.colors
+        return Group {
             if board.stats.currentCombo >= 2 {
                 GlassPanel(cornerRadius: 12) {
                     HStack(spacing: 6) {
@@ -158,34 +201,79 @@ struct GameBoardView: View {
         }
     }
 
-    private func isGhostCell(row: Int, col: Int, ghostRow: Int, ghostCol: Int) -> Bool {
-        guard let piece = board.currentPiece else { return false }
-        let shape = piece.cells
-        for r in 0..<shape.count {
-            for c in 0..<shape[r].count {
-                if shape[r][c] == 1 {
-                    if ghostRow + r == row && ghostCol + c == col {
-                        return true
-                    }
+    // MARK: - Effects
+
+    private func triggerDropEffects() {
+        withAnimation(.easeOut(duration: 0.04)) { dropShake = 4 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
+            withAnimation(.easeInOut(duration: 0.08)) { dropShake = -2 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeOut(duration: 0.1)) { dropShake = 0 }
+        }
+        for i in 0..<3 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.04) {
+                withAnimation(.easeOut(duration: 0.35)) {
+                    ringScales[i] = 1
+                    ringOpacities[i] = 0.5
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    withAnimation(.easeIn(duration: 0.15)) { ringOpacities[i] = 0 }
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ringScales = [0, 0, 0]
+            ringOpacities = [0, 0, 0]
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func isGhost(row: Int, col: Int, ghostPos: (row: Int, col: Int)?) -> Bool {
+        guard isPlayer, let pos = ghostPos, let piece = board.currentPiece else { return false }
+        for r in 0..<piece.cells.count {
+            for c in 0..<piece.cells[r].count {
+                if piece.cells[r][c] == 1 && pos.row + r == row && pos.col + c == col {
+                    return true
                 }
             }
         }
         return false
     }
 
-    private func isCurrentPieceCell(row: Int, col: Int) -> Bool {
-        guard let piece = board.currentPiece else { return false }
-        let shape = piece.cells
-        for r in 0..<shape.count {
-            for c in 0..<shape[r].count {
-                if shape[r][c] == 1 {
-                    if piece.row + r == row && piece.col + c == col {
-                        return true
-                    }
+    private func isCurrent(row: Int, col: Int) -> Bool {
+        guard isPlayer, let piece = board.currentPiece else { return false }
+        for r in 0..<piece.cells.count {
+            for c in 0..<piece.cells[r].count {
+                if piece.cells[r][c] == 1 && piece.row + r == row && piece.col + c == col {
+                    return true
                 }
             }
         }
         return false
+    }
+
+    private func isJustLocked(row: Int, col: Int) -> Bool {
+        guard isPlayer else { return false }
+        return board.justLockedCells.contains { $0.row == row && $0.col == col }
+    }
+
+    private func cellColor(cell: Cell, ghostPos: (row: Int, col: Int)?, current: Bool, ghost: Bool) -> Color? {
+        if current {
+            return board.currentPiece?.type.color
+        }
+        if ghost {
+            return board.currentPiece?.type.color
+        }
+        return cell.color?.color
+    }
+}
+
+// Safe array subscript
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
@@ -230,7 +318,7 @@ struct OpponentBoardView: View {
                 HStack {
                     VStack(spacing: 4) {
                         Text("LEVEL")
-                            .font(.system(size: 8, weight: .medium, design: .rounded))
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(c.textSecondary)
                         Text("\(board.level)")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
@@ -239,7 +327,7 @@ struct OpponentBoardView: View {
                     Spacer()
                     VStack(spacing: 4) {
                         Text("LINES")
-                            .font(.system(size: 8, weight: .medium, design: .rounded))
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(c.textSecondary)
                         Text("\(board.linesCleared)")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
@@ -247,12 +335,12 @@ struct OpponentBoardView: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 10)
+                .padding(.bottom, 8)
             }
         }
         .frame(
             width: CGFloat(GameConstants.cols) * 12 + 60,
-            height: CGFloat(GameConstants.rows) * 12 + 120
+            height: CGFloat(GameConstants.rows) * 12 + 100
         )
     }
 }

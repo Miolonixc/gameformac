@@ -135,6 +135,7 @@ struct GlassCell: View {
     var isGhost: Bool = false
     var isActive: Bool = false
     var isClearing: Bool = false
+    var isJustLocked: Bool = false
     var cellSize: CGFloat = GameConstants.cellSize
     @Environment(\.theme) var theme
 
@@ -148,9 +149,13 @@ struct GlassCell: View {
                     .strokeBorder(cellStroke(colors: c), lineWidth: isActive ? 1.5 : 0.5)
             )
             .shadow(color: (color ?? .clear).opacity(filled ? (isActive ? 0.8 : 0.4) : 0), radius: isActive ? 6 : 3, x: 0, y: 1)
-            .brightness(isClearing ? 0.6 : (isActive ? 0.15 : 0))
-            .scaleEffect(isClearing ? 1.05 : 1.0)
+            .brightness(isClearing ? 0.6 : (isJustLocked ? 0.4 : (isActive ? 0.15 : 0)))
+            .overlay(
+                isJustLocked ? RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.25)) : nil
+            )
+            .scaleEffect(isClearing ? 1.05 : (isJustLocked ? 1.08 : 1.0))
             .animation(.easeOut(duration: 0.1), value: isClearing)
+            .animation(.easeOut(duration: 0.15), value: isJustLocked)
     }
 
     private func cellFill(colors c: ThemeColors) -> some ShapeStyle {

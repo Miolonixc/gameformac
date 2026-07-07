@@ -43,6 +43,11 @@ class GameBoard: ObservableObject, Codable {
     @Published var lockDelay: TimeInterval = 0
     @Published var isLocking: Bool = false
 
+    // Animation states
+    @Published var hardDropFlash: Bool = false
+    @Published var lineClearRows: Set<Int> = []
+    @Published var lineClearFlash: Bool = false
+
     let rows = GameConstants.rows
     let cols = GameConstants.cols
 
@@ -222,6 +227,13 @@ class GameBoard: ObservableObject, Codable {
             dropCount += 1
         }
         stats.piecesPlaced += 1
+
+        // Hard drop flash animation
+        hardDropFlash = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.hardDropFlash = false
+        }
+
         lockPiece()
     }
 
@@ -299,6 +311,18 @@ class GameBoard: ObservableObject, Codable {
                 clearedRows.append(r)
             }
         }
+
+        guard !clearedRows.isEmpty else { return 0 }
+
+        // Line clear flash animation
+        lineClearRows = Set(clearedRows)
+        lineClearFlash = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.lineClearFlash = false
+            self?.lineClearRows = []
+        }
+
         for row in clearedRows {
             grid.remove(at: row)
             grid.insert(Array(repeating: Cell.empty, count: cols), at: 0)

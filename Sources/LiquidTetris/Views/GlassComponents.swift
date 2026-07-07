@@ -133,6 +133,8 @@ struct GlassCell: View {
     let color: Color?
     let filled: Bool
     var isGhost: Bool = false
+    var isActive: Bool = false
+    var isClearing: Bool = false
     var cellSize: CGFloat = GameConstants.cellSize
     @Environment(\.theme) var theme
 
@@ -143,14 +145,33 @@ struct GlassCell: View {
             .frame(width: cellSize - 2, height: cellSize - 2)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(cellStroke(colors: c), lineWidth: 0.5)
+                    .strokeBorder(cellStroke(colors: c), lineWidth: isActive ? 1.5 : 0.5)
             )
-            .shadow(color: (color ?? .clear).opacity(filled ? 0.4 : 0), radius: 3, x: 0, y: 1)
+            .shadow(color: (color ?? .clear).opacity(filled ? (isActive ? 0.8 : 0.4) : 0), radius: isActive ? 6 : 3, x: 0, y: 1)
+            .brightness(isClearing ? 0.6 : (isActive ? 0.15 : 0))
+            .scaleEffect(isClearing ? 1.05 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: isClearing)
     }
 
     private func cellFill(colors c: ThemeColors) -> some ShapeStyle {
-        if isGhost {
+        if isClearing, let color = color {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [.white, color, color.opacity(0.5)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        } else if isGhost {
             return AnyShapeStyle(color?.opacity(0.2) ?? c.cellEmpty)
+        } else if isActive, let color = color {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [color, color.opacity(0.85)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
         } else if filled, let color = color {
             return AnyShapeStyle(
                 LinearGradient(
@@ -165,8 +186,10 @@ struct GlassCell: View {
     }
 
     private func cellStroke(colors c: ThemeColors) -> some ShapeStyle {
-        if filled, let color = color {
-            return AnyShapeStyle(color.opacity(0.6))
+        if isClearing {
+            return AnyShapeStyle(Color.white.opacity(0.8))
+        } else if filled, let color = color {
+            return AnyShapeStyle(color.opacity(isActive ? 0.9 : 0.6))
         } else {
             return AnyShapeStyle(c.cellStroke)
         }

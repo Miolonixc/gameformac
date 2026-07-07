@@ -5,6 +5,7 @@ struct GameBoardView: View {
     let isPlayer: Bool
     var label: String = ""
     @Environment(\.theme) var theme
+    @State private var dropShake: CGFloat = 0
 
     var body: some View {
         let c = theme.colors
@@ -36,21 +37,44 @@ struct GameBoardView: View {
                                 let ghostPos = isPlayer ? board.ghostPosition() : nil
                                 let isGhost = isPlayer && ghostPos != nil && !cell.filled &&
                                     isGhostCell(row: row, col: col, ghostRow: ghostPos!.row, ghostCol: ghostPos!.col)
+                                let isCurrentPiece = isPlayer && isCurrentPieceCell(row: row, col: col)
+                                let isLineClearing = board.lineClearRows.contains(row)
 
                                 GlassCell(
-                                    color: ghostPos != nil && isGhost ? board.currentPiece?.type.color : cell.color?.color,
+                                    color: ghostPos != nil && isGhost
+                                        ? board.currentPiece?.type.color
+                                        : cell.color?.color,
                                     filled: cell.filled,
-                                    isGhost: isGhost && !cell.filled
+                                    isGhost: isGhost && !cell.filled,
+                                    isActive: isCurrentPiece,
+                                    isClearing: isLineClearing
                                 )
                             }
                         }
                     }
                 }
                 .padding(4)
+                .offset(y: dropShake)
+                .onChange(of: board.hardDropFlash) { _, flash in
+                    if flash {
+                        withAnimation(.easeOut(duration: 0.04)) {
+                            dropShake = 4
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
+                            withAnimation(.easeInOut(duration: 0.08)) {
+                                dropShake = -2
+                            }
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            withAnimation(.easeOut(duration: 0.1)) {
+                                dropShake = 0
+                            }
+                        }
+                    }
+                }
 
                 // Bottom stats
                 HStack {
-                    // Queue (3 upcoming pieces)
                     VStack(spacing: 4) {
                         Text("QUEUE")
                             .font(.system(size: 8, weight: .medium, design: .rounded))
@@ -115,7 +139,6 @@ struct GameBoardView: View {
             }
         )
         .overlay(alignment: .topTrailing) {
-            // Combo counter
             if board.stats.currentCombo >= 2 {
                 GlassPanel(cornerRadius: 12) {
                     HStack(spacing: 6) {
@@ -149,6 +172,21 @@ struct GameBoardView: View {
         }
         return false
     }
+
+    private func isCurrentPieceCell(row: Int, col: Int) -> Bool {
+        guard let piece = board.currentPiece else { return false }
+        let shape = piece.cells
+        for r in 0..<shape.count {
+            for c in 0..<shape[r].count {
+                if shape[r][c] == 1 {
+                    if piece.row + r == row && piece.col + c == col {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
 }
 
 // MARK: - Opponent Board View
@@ -175,7 +213,6 @@ struct OpponentBoardView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 6)
 
-                // Mini board
                 VStack(spacing: 0) {
                     ForEach(0..<board.rows, id: \.self) { row in
                         HStack(spacing: 0) {

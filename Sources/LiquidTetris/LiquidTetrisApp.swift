@@ -27,7 +27,7 @@ struct LiquidTetrisApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.theme, theme)
+                .environmentObject(theme)
                 .frame(minWidth: 700, minHeight: 620)
                 .background(WindowAccessor { window in
                     window.makeKeyAndOrderFront(nil)

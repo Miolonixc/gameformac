@@ -5,7 +5,7 @@ import SwiftUI
 struct GlassPanel<Content: View>: View {
     var content: Content
     var cornerRadius: CGFloat = 24
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     init(cornerRadius: CGFloat = 24, @ViewBuilder content: () -> Content) {
         self.cornerRadius = cornerRadius
@@ -50,7 +50,7 @@ struct GlassButton: View {
 
     @State private var isHovered = false
     @State private var isPressed = false
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -103,7 +103,7 @@ struct GlassCard: View {
     let title: String
     let value: String
     var icon: String = "star.fill"
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -137,7 +137,7 @@ struct GlassCell: View {
     var isClearing: Bool = false
     var isJustLocked: Bool = false
     var cellSize: CGFloat = GameConstants.cellSize
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -243,7 +243,7 @@ struct PreviewPiece: View {
 
 struct LiquidBackground: View {
     @State private var phase: CGFloat = 0
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -279,7 +279,7 @@ struct LiquidBackground: View {
 // MARK: - Theme Toggle Button
 
 struct ThemeToggleButton: View {
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         Button(action: { theme.toggle() }) {

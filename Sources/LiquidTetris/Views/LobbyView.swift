@@ -3,7 +3,7 @@ import SwiftUI
 struct LobbyView: View {
     @ObservedObject var viewModel: GameViewModel
     @State private var showMenu = true
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         ZStack {

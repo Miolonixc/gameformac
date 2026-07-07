@@ -4,7 +4,7 @@ struct GameBoardView: View {
     @ObservedObject var board: GameBoard
     let isPlayer: Bool
     var label: String = ""
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
     @State private var dropShake: CGFloat = 0
     @State private var ringScales: [CGFloat] = [0, 0, 0]
     @State private var ringOpacities: [Double] = [0, 0, 0]
@@ -281,7 +281,7 @@ extension Array {
 
 struct OpponentBoardView: View {
     @ObservedObject var board: GameBoard
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct GamePlayView: View {
     @ObservedObject var viewModel: GameViewModel
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -117,7 +117,7 @@ struct GamePlayView: View {
 struct PauseOverlay: View {
     let onResume: () -> Void
     let onQuit: () -> Void
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -157,7 +157,7 @@ struct ResultOverlay: View {
     let message: String
     let stats: GameStats?
     let onDismiss: () -> Void
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -193,7 +193,7 @@ struct ResultOverlay: View {
 
 struct GameStatsView: View {
     let stats: GameStats
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         let c = theme.colors
@@ -227,7 +227,7 @@ struct GameStatsView: View {
 
 struct ContentView: View {
     @StateObject private var viewModel = GameViewModel()
-    @Environment(\.theme) var theme
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         ZStack {

@@ -3,6 +3,10 @@
 > macOS Tetris with Liquid Glass UI, multiplayer over Wi-Fi, local 2P mode.
 > SwiftUI + MultipeerConnectivity, serverless peer-to-peer.
 
+**Authors:** Volodymyr Kozlov · Miolonixc
+**Platform:** macOS 14+ (Sonoma)
+**Language:** Swift 5.9+ / SwiftUI
+
 ---
 
 ## Table of Contents

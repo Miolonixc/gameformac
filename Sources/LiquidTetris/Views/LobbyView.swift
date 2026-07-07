@@ -59,12 +59,16 @@ struct LobbyView: View {
                     viewModel.startSinglePlayer()
                 }
 
+                GlassButton(title: "2 Players (Local)", icon: "person.2.fill", color: c.accentGreen) {
+                    viewModel.startLocal2Player()
+                }
+
                 GlassButton(title: "Find Opponent", icon: "network", color: c.accentPurple) {
                     showMenu = false
                     viewModel.autoConnect()
                 }
 
-                GlassButton(title: "Host Game", icon: "antenna.radiowaves.left.and.right", color: c.accentGreen) {
+                GlassButton(title: "Host Game", icon: "antenna.radiowaves.left.and.right", color: c.accentOrange) {
                     showMenu = false
                     viewModel.hostMultiplayer()
                 }
@@ -75,15 +79,33 @@ struct LobbyView: View {
                 }
             }
 
-            // Info
+            // Controls info
             GlassPanel(cornerRadius: 16) {
-                HStack(spacing: 16) {
-                    Image(systemName: "wifi")
-                        .foregroundStyle(c.accentCyan)
-                    Text("Play with a friend on the same Wi-Fi network. The game finds opponents automatically.")
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(c.textSecondary)
-                        .multilineTextAlignment(.center)
+                VStack(spacing: 12) {
+                    HStack(spacing: 32) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("P1")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(c.accentCyan)
+                            Text("\u{2190}\u{2192} Move  \u{2191} Rotate  \u{2193} Drop")
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(c.textSecondary)
+                            Text("Space Hard  C Hold")
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(c.textSecondary)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("P2")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(c.accentGreen)
+                            Text("A/D Move  W Rotate  S Drop")
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(c.textSecondary)
+                            Text("Space Hard  E Hold")
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(c.textSecondary)
+                        }
+                    }
                 }
                 .padding(16)
             }

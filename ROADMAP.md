@@ -17,14 +17,17 @@
 ---
 
 ## v1.1 — Polish & UX
+- [x] **Pause menu** — ESC to pause, resume/quit options
+- [x] **Game statistics** — pieces placed, lines sent, longest combo, Tetris count
+- [x] **Piece lock delay** — 0.5s window to slide piece after landing, 15 max resets
+- [x] **DAS (Delayed Auto Shift)** — smooth held-key movement (0.15s delay, 0.05s repeat)
+- [x] **Next piece queue** — show 3 upcoming pieces
+- [x] **Combo counter** — animated multiplier display
+- [x] **Local 2-player mode** — P1: arrows, P2: WASD/E/Q
+- [x] **Keyboard fix** — NSEvent global monitor, works without focus
 - [ ] **Game start countdown** — 3-2-1-GO sync before multiplayer match
 - [ ] **Rematch system** — both players agree to play again
-- [ ] **Pause menu** — ESC to pause, resume/quit options
-- [ ] **Game statistics** — pieces placed, lines sent, accuracy, longest combo
 - [ ] **Score history** — persistent local leaderboard
-- [ ] **Piece lock delay** — brief window to slide piece after landing
-- [ ] **DAS (Delayed Auto Shift)** — smooth held-key movement
-- [ ] **Next piece queue** — show 3 upcoming pieces instead of 1
 - [ ] **Sound effects** — move, rotate, drop, line clear, Tetris, game over
 - [ ] **Haptic feedback** — subtle vibration on drop/clear (via trackpad)
 

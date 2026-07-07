@@ -86,4 +86,8 @@ enum GameConstants {
     static let cellSize: CGFloat = 28
     static let dropInterval: TimeInterval = 0.8
     static let levelSpeedup: TimeInterval = 0.05
+    static let lockDelay: TimeInterval = 0.5
+    static let maxLockResets: Int = 15
+    static let dasDelay: TimeInterval = 0.15
+    static let dasRepeat: TimeInterval = 0.05
 }

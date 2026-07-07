@@ -50,14 +50,21 @@ struct GameBoardView: View {
 
                 // Bottom stats
                 HStack {
+                    // Queue (3 upcoming pieces)
                     VStack(spacing: 4) {
-                        Text("NEXT")
+                        Text("QUEUE")
                             .font(.system(size: 8, weight: .medium, design: .rounded))
                             .foregroundStyle(c.textSecondary)
                             .textCase(.uppercase)
-                        PreviewPiece(type: board.nextPiece?.type, cellSize: 14)
+                        VStack(spacing: 6) {
+                            ForEach(0..<min(3, board.pieceQueue.count), id: \.self) { i in
+                                PreviewPiece(type: board.pieceQueue[i], cellSize: 12)
+                            }
+                        }
                     }
+
                     Spacer()
+
                     VStack(spacing: 4) {
                         Text("LEVEL")
                             .font(.system(size: 8, weight: .medium, design: .rounded))
@@ -67,7 +74,9 @@ struct GameBoardView: View {
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundStyle(c.textPrimary)
                     }
+
                     Spacer()
+
                     VStack(spacing: 4) {
                         Text("LINES")
                             .font(.system(size: 8, weight: .medium, design: .rounded))
@@ -105,6 +114,25 @@ struct GameBoardView: View {
                 }
             }
         )
+        .overlay(alignment: .topTrailing) {
+            // Combo counter
+            if board.stats.currentCombo >= 2 {
+                GlassPanel(cornerRadius: 12) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(c.accentOrange)
+                        Text("\(board.stats.currentCombo)x")
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .foregroundStyle(c.accentOrange)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+                .padding(8)
+                .transition(.scale.combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.2), value: board.stats.currentCombo)
+            }
+        }
     }
 
     private func isGhostCell(row: Int, col: Int, ghostRow: Int, ghostCol: Int) -> Bool {

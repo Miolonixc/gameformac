@@ -10,18 +10,38 @@ struct Cell: Codable {
     static let empty = Cell(filled: false, color: nil)
 }
 
+// MARK: - Game Stats
+
+struct GameStats: Codable {
+    var piecesPlaced: Int = 0
+    var linesClearedTotal: Int = 0
+    var linesSent: Int = 0
+    var longestCombo: Int = 0
+    var currentCombo: Int = 0
+    var tetrisCount: Int = 0
+    var startTime: TimeInterval = Date().timeIntervalSince1970
+
+    var uptime: TimeInterval {
+        Date().timeIntervalSince1970 - startTime
+    }
+}
+
 // MARK: - GameBoard
 
 class GameBoard: ObservableObject, Codable {
     @Published var grid: [[Cell]]
     @Published var currentPiece: Tetromino?
-    @Published var nextPiece: Tetromino?
+    @Published var pieceQueue: [TetrominoType] = []
     @Published var score: Int = 0
     @Published var level: Int = 1
     @Published var linesCleared: Int = 0
     @Published var isGameOver: Bool = false
     @Published var heldPiece: TetrominoType?
     @Published var canHold: Bool = true
+    @Published var isPaused: Bool = false
+    @Published var stats = GameStats()
+    @Published var lockDelay: TimeInterval = 0
+    @Published var isLocking: Bool = false
 
     let rows = GameConstants.rows
     let cols = GameConstants.cols
@@ -30,13 +50,14 @@ class GameBoard: ObservableObject, Codable {
 
     init() {
         grid = Array(repeating: Array(repeating: Cell.empty, count: GameConstants.cols), count: GameConstants.rows)
+        fillQueue()
         spawnPiece()
     }
 
     // MARK: - Coding
 
     enum CodingKeys: String, CodingKey {
-        case grid, score, level, linesCleared, isGameOver, heldPiece, canHold
+        case grid, score, level, linesCleared, isGameOver, heldPiece, canHold, stats
     }
 
     required init(from decoder: Decoder) throws {
@@ -48,8 +69,9 @@ class GameBoard: ObservableObject, Codable {
         isGameOver = try container.decode(Bool.self, forKey: .isGameOver)
         heldPiece = try container.decodeIfPresent(TetrominoType.self, forKey: .heldPiece)
         canHold = try container.decode(Bool.self, forKey: .canHold)
+        stats = (try? container.decode(GameStats.self, forKey: .stats)) ?? GameStats()
         currentPiece = nil
-        nextPiece = nil
+        pieceQueue = []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -61,6 +83,7 @@ class GameBoard: ObservableObject, Codable {
         try container.encode(isGameOver, forKey: .isGameOver)
         try container.encode(heldPiece, forKey: .heldPiece)
         try container.encode(canHold, forKey: .canHold)
+        try container.encode(stats, forKey: .stats)
     }
 
     // MARK: - Piece Bag (7-bag randomizer)
@@ -72,15 +95,25 @@ class GameBoard: ObservableObject, Codable {
         return pieceBag.removeFirst()
     }
 
+    // MARK: - Queue
+
+    private func fillQueue() {
+        while pieceQueue.count < 5 {
+            pieceQueue.append(nextFromBag())
+        }
+    }
+
     // MARK: - Spawn
 
     func spawnPiece() {
-        if nextPiece == nil {
-            nextPiece = Tetromino.random()
-        }
-        currentPiece = nextPiece
-        nextPiece = Tetromino(type: nextFromBag(), row: 0, col: 3, rotation: 0)
+        fillQueue()
+
+        let type = pieceQueue.removeFirst()
+        currentPiece = Tetromino(type: type, row: 0, col: 3, rotation: 0)
+        fillQueue()
         canHold = true
+        isLocking = false
+        lockDelay = 0
 
         if let piece = currentPiece, !isValidPosition(piece: piece) {
             isGameOver = true
@@ -109,6 +142,15 @@ class GameBoard: ObservableObject, Codable {
         return true
     }
 
+    // MARK: - Check if piece is on ground
+
+    func isOnGround() -> Bool {
+        guard let piece = currentPiece else { return false }
+        var test = piece
+        test.row += 1
+        return !isValidPosition(piece: test)
+    }
+
     // MARK: - Movement
 
     @discardableResult
@@ -117,6 +159,7 @@ class GameBoard: ObservableObject, Codable {
         piece.col -= 1
         if isValidPosition(piece: piece) {
             currentPiece = piece
+            resetLockDelayIfNeeded()
             return true
         }
         return false
@@ -128,6 +171,7 @@ class GameBoard: ObservableObject, Codable {
         piece.col += 1
         if isValidPosition(piece: piece) {
             currentPiece = piece
+            resetLockDelayIfNeeded()
             return true
         }
         return false
@@ -139,9 +183,14 @@ class GameBoard: ObservableObject, Codable {
         piece.row += 1
         if isValidPosition(piece: piece) {
             currentPiece = piece
+            isLocking = false
+            lockDelay = 0
             return true
         } else {
-            lockPiece()
+            if !isLocking {
+                isLocking = true
+                lockDelay = 0
+            }
             return false
         }
     }
@@ -159,6 +208,7 @@ class GameBoard: ObservableObject, Codable {
             kicked.col += kick.1
             if isValidPosition(piece: kicked) {
                 currentPiece = kicked
+                resetLockDelayIfNeeded()
                 return true
             }
         }
@@ -167,7 +217,12 @@ class GameBoard: ObservableObject, Codable {
     }
 
     func hardDrop() {
-        while moveDown() {}
+        var dropCount = 0
+        while moveDown() {
+            dropCount += 1
+        }
+        stats.piecesPlaced += 1
+        lockPiece()
     }
 
     func holdPiece() {
@@ -181,6 +236,25 @@ class GameBoard: ObservableObject, Codable {
         }
         heldPiece = type
         canHold = false
+        isLocking = false
+        lockDelay = 0
+    }
+
+    // MARK: - Lock Delay
+
+    func tickLockDelay(_ dt: TimeInterval) {
+        guard isLocking, let piece = currentPiece else { return }
+        lockDelay += dt
+        if lockDelay >= GameConstants.lockDelay {
+            stats.piecesPlaced += 1
+            lockPiece()
+        }
+    }
+
+    private func resetLockDelayIfNeeded() {
+        if isLocking && stats.piecesPlaced < GameConstants.maxLockResets {
+            lockDelay = 0
+        }
     }
 
     // MARK: - Lock & Clear
@@ -201,6 +275,20 @@ class GameBoard: ObservableObject, Codable {
         }
         let cleared = clearLines()
         updateScore(lines: cleared)
+
+        if cleared >= 2 {
+            stats.currentCombo += 1
+            stats.longestCombo = max(stats.longestCombo, stats.currentCombo)
+            stats.linesSent += cleared - 1
+        } else {
+            stats.currentCombo = 0
+        }
+
+        if cleared == 4 {
+            stats.tetrisCount += 1
+        }
+
+        stats.linesClearedTotal += cleared
         spawnPiece()
     }
 
@@ -221,7 +309,8 @@ class GameBoard: ObservableObject, Codable {
 
     func updateScore(lines: Int) {
         let points: [Int: Int] = [1: 100, 2: 300, 3: 500, 4: 800]
-        score += (points[lines] ?? 0) * level
+        let comboBonus = stats.currentCombo * 50
+        score += ((points[lines] ?? 0) + comboBonus) * level
         level = (linesCleared / 10) + 1
     }
 
@@ -246,5 +335,11 @@ class GameBoard: ObservableObject, Codable {
             piece.row += 1
         }
         return (piece.row - 1, piece.col)
+    }
+
+    // MARK: - Pause
+
+    func togglePause() {
+        isPaused.toggle()
     }
 }

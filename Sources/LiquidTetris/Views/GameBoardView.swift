@@ -4,6 +4,7 @@ struct GameBoardView: View {
     @ObservedObject var board: GameBoard
     let isPlayer: Bool
     var label: String = ""
+    var gameMode: GameMode = .marathon
     @EnvironmentObject var theme: ThemeManager
     @State private var dropShake: CGFloat = 0
     @State private var ringScales: [CGFloat] = [0, 0, 0]
@@ -139,7 +140,7 @@ struct GameBoardView: View {
                     .textCase(.uppercase)
                 Text("\(board.level)")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
-                    .foregroundStyle(c.textPrimary)
+                    .foregroundStyle(board.levelManager.isMilestone ? c.accentYellow : c.textPrimary)
             }
             Spacer()
             VStack(spacing: 4) {

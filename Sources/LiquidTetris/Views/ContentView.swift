@@ -10,49 +10,21 @@ struct GamePlayView: View {
             LiquidBackground()
 
             if viewModel.gameStarted {
-                HStack(spacing: viewModel.isLocal2P ? 24 : 40) {
-                    // Player 1 Board
-                    VStack(spacing: 12) {
-                        if viewModel.isLocal2P {
-                            GlassPanel(cornerRadius: 10) {
-                                Text("P1  \u{2190}\u{2192}\u{2191}\u{2193} Move  \u{2191} Rotate  Space Drop  C Hold")
-                                    .font(.system(size: 9, weight: .medium, design: .rounded))
-                                    .foregroundStyle(c.textSecondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                            }
-                        }
-
-                        GameBoardView(
-                            board: viewModel.playerBoard,
-                            isPlayer: true,
-                            label: viewModel.isLocal2P ? "PLAYER 1" : "YOU"
-                        )
-
-                        if !viewModel.isMultiplayer && !viewModel.isLocal2P {
-                            controlsHint
-                        }
+                VStack(spacing: 0) {
+                    // Top bar: mode + timer
+                    if viewModel.selectedMode.showTimer || viewModel.selectedMode.showLineProgress {
+                        topBar
+                            .padding(.horizontal, 24)
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
                     }
 
-                    // VS Divider
-                    if viewModel.isMultiplayer || viewModel.isLocal2P {
-                        VStack(spacing: 20) {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(c.accentYellow)
-                            Text("VS")
-                                .font(.system(size: 20, weight: .black, design: .rounded))
-                                .foregroundStyle(c.textSecondary)
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(c.accentYellow)
-                        }
-
-                        // Player 2 Board
+                    HStack(spacing: viewModel.isLocal2P ? 24 : 40) {
+                        // Player 1 Board
                         VStack(spacing: 12) {
                             if viewModel.isLocal2P {
                                 GlassPanel(cornerRadius: 10) {
-                                    Text("P2  WASD Move  W Rotate  Space Drop  E Hold")
+                                    Text("P1  \u{2190}\u{2192}\u{2191}\u{2193} Move  \u{2191} Rotate  Space Drop  C Hold")
                                         .font(.system(size: 9, weight: .medium, design: .rounded))
                                         .foregroundStyle(c.textSecondary)
                                         .padding(.horizontal, 10)
@@ -61,14 +33,59 @@ struct GamePlayView: View {
                             }
 
                             GameBoardView(
-                                board: viewModel.player2Board,
-                                isPlayer: false,
-                                label: viewModel.isLocal2P ? "PLAYER 2" : "OPPONENT"
+                                board: viewModel.playerBoard,
+                                isPlayer: true,
+                                label: viewModel.isLocal2P ? "PLAYER 1" : "YOU",
+                                gameMode: viewModel.selectedMode
                             )
+
+                            if !viewModel.isMultiplayer && !viewModel.isLocal2P {
+                                controlsHint
+                            }
+                        }
+
+                        // VS Divider
+                        if viewModel.isMultiplayer || viewModel.isLocal2P {
+                            VStack(spacing: 20) {
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(c.accentYellow)
+                                Text("VS")
+                                    .font(.system(size: 20, weight: .black, design: .rounded))
+                                    .foregroundStyle(c.textSecondary)
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(c.accentYellow)
+                            }
+
+                            // Player 2 Board
+                            VStack(spacing: 12) {
+                                if viewModel.isLocal2P {
+                                    GlassPanel(cornerRadius: 10) {
+                                        Text("P2  WASD Move  W Rotate  Space Drop  E Hold")
+                                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                                            .foregroundStyle(c.textSecondary)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 4)
+                                    }
+                                }
+
+                                GameBoardView(
+                                    board: viewModel.player2Board,
+                                    isPlayer: false,
+                                    label: viewModel.isLocal2P ? "PLAYER 2" : "OPPONENT",
+                                    gameMode: viewModel.selectedMode
+                                )
+                            }
                         }
                     }
+                    .padding(24)
                 }
-                .padding(24)
+            }
+
+            // Level Up Banner
+            if viewModel.playerBoard.showLevelUp {
+                LevelUpBanner(level: viewModel.playerBoard.levelUpLevel)
             }
 
             // Pause Overlay
@@ -83,6 +100,74 @@ struct GamePlayView: View {
                 )
             }
         }
+    }
+
+    // MARK: - Top Bar (Timer / Progress)
+
+    private var topBar: some View {
+        let c = theme.colors
+        return HStack {
+            // Mode badge
+            GlassPanel(cornerRadius: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: viewModel.selectedMode.icon)
+                        .font(.system(size: 12))
+                        .foregroundStyle(c.accentCyan)
+                    Text(viewModel.selectedMode.displayName)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(c.textSecondary)
+                    Text("·")
+                        .foregroundStyle(c.textMuted)
+                    Text(viewModel.selectedDifficulty.displayName)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(c.textMuted)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+
+            Spacer()
+
+            // Timer (Sprint/Ultra)
+            if viewModel.selectedMode.showTimer {
+                GlassPanel(cornerRadius: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 12))
+                            .foregroundStyle(viewModel.playerBoard.timeRemaining < 10 ? c.accentRed : c.accentCyan)
+                        Text(formatTime(viewModel.playerBoard.timeRemaining))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundStyle(viewModel.playerBoard.timeRemaining < 10 ? c.accentRed : c.textPrimary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+            }
+
+            // Line Progress (Sprint)
+            if viewModel.selectedMode.showLineProgress, let target = viewModel.selectedMode.targetLines {
+                GlassPanel(cornerRadius: 8) {
+                    HStack(spacing: 8) {
+                        Text("\(viewModel.playerBoard.linesCleared)/\(target)")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundStyle(c.textPrimary)
+                        ProgressView(value: Double(viewModel.playerBoard.linesCleared), total: Double(target))
+                            .frame(width: 80)
+                            .tint(c.accentGreen)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 
     var controlsHint: some View {
@@ -108,6 +193,50 @@ struct GamePlayView: View {
             Text(label)
                 .font(.system(size: 9, design: .rounded))
                 .foregroundStyle(theme.colors.textSecondary)
+        }
+    }
+}
+
+// MARK: - Level Up Banner
+
+struct LevelUpBanner: View {
+    let level: Int
+    @EnvironmentObject var theme: ThemeManager
+    @State private var opacity: Double = 0
+    @State private var yOffset: CGFloat = -20
+
+    var body: some View {
+        let c = theme.colors
+        VStack {
+            GlassPanel(cornerRadius: 16) {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(c.accentYellow)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("LEVEL UP")
+                            .font(.system(size: 14, weight: .black, design: .rounded))
+                            .foregroundStyle(c.accentYellow)
+                        Text("Level \(level)")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(c.textPrimary)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+            .opacity(opacity)
+            .offset(y: yOffset)
+            .animation(.easeOut(duration: 0.3), value: opacity)
+            .animation(.easeOut(duration: 0.3), value: yOffset)
+            Spacer()
+        }
+        .padding(.top, 60)
+        .onAppear {
+            withAnimation { opacity = 1; yOffset = 0 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation { opacity = 0; yOffset = -20 }
+            }
         }
     }
 }
@@ -167,9 +296,9 @@ struct ResultOverlay: View {
 
             GlassPanel(cornerRadius: 32) {
                 VStack(spacing: 24) {
-                    Image(systemName: message.contains("WIN") ? "trophy.fill" : "xmark.circle.fill")
+                    Image(systemName: message.contains("WIN") || message.contains("COMPLETE") ? "trophy.fill" : "xmark.circle.fill")
                         .font(.system(size: 60))
-                        .foregroundStyle(message.contains("WIN") ? c.accentYellow : c.accentRed)
+                        .foregroundStyle(message.contains("WIN") || message.contains("COMPLETE") ? c.accentYellow : c.accentRed)
 
                     Text(message)
                         .font(.system(size: 36, weight: .black, design: .rounded))
@@ -198,12 +327,21 @@ struct GameStatsView: View {
     var body: some View {
         let c = theme.colors
         GlassPanel(cornerRadius: 16) {
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 statRow(label: "Pieces", value: "\(stats.piecesPlaced)", color: c.accentCyan)
                 statRow(label: "Lines Cleared", value: "\(stats.linesClearedTotal)", color: c.accentGreen)
                 statRow(label: "Lines Sent", value: "\(stats.linesSent)", color: c.accentOrange)
                 statRow(label: "Longest Combo", value: "\(stats.longestCombo)x", color: c.accentPurple)
                 statRow(label: "Tetris", value: "\(stats.tetrisCount)", color: c.accentYellow)
+                if stats.tSpinCount > 0 {
+                    statRow(label: "T-Spins", value: "\(stats.tSpinCount)", color: c.accentPurple)
+                }
+                if stats.backToBackCount > 0 {
+                    statRow(label: "Back-to-Back", value: "\(stats.backToBackCount)", color: c.accentOrange)
+                }
+                if stats.perfectClearCount > 0 {
+                    statRow(label: "Perfect Clears", value: "\(stats.perfectClearCount)", color: c.accentYellow)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)

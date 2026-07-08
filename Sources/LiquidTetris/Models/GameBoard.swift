@@ -19,6 +19,9 @@ struct GameStats: Codable {
     var longestCombo: Int = 0
     var currentCombo: Int = 0
     var tetrisCount: Int = 0
+    var tSpinCount: Int = 0
+    var perfectClearCount: Int = 0
+    var backToBackCount: Int = 0
     var startTime: TimeInterval = Date().timeIntervalSince1970
 
     var uptime: TimeInterval {
@@ -33,7 +36,6 @@ class GameBoard: ObservableObject, Codable {
     @Published var currentPiece: Tetromino?
     @Published var pieceQueue: [TetrominoType] = []
     @Published var score: Int = 0
-    @Published var level: Int = 1
     @Published var linesCleared: Int = 0
     @Published var isGameOver: Bool = false
     @Published var heldPiece: TetrominoType?
@@ -43,6 +45,23 @@ class GameBoard: ObservableObject, Codable {
     @Published var lockDelay: TimeInterval = 0
     @Published var isLocking: Bool = false
 
+    // Level system
+    var levelManager = LevelManager()
+    var difficulty: DifficultyPreset = .normal
+    var gameMode: GameMode = .marathon
+    var setupDone: Bool = false
+
+    // Sprint/Ultra timer
+    @Published var elapsedTime: TimeInterval = 0
+    @Published var timeRemaining: TimeInterval = 0
+
+    // T-spin tracking
+    private var lastWasRotation: Bool = false
+    private var lastRotationMoved: Bool = false
+
+    // Back-to-back tracking
+    private var lastClearWasTetrisOrTSpin: Bool = false
+
     // Animation states
     @Published var hardDropFlash: Bool = false
     @Published var lineClearRows: Set<Int> = []
@@ -51,6 +70,10 @@ class GameBoard: ObservableObject, Codable {
     @Published var dropImpactColor: Color = .clear
     @Published var justLockedCells: [(row: Int, col: Int)] = []
     @Published var clearingCol: Int = -1
+
+    // Level-up animation
+    @Published var showLevelUp: Bool = false
+    @Published var levelUpLevel: Int = 0
 
     let rows = GameConstants.rows
     let cols = GameConstants.cols
@@ -63,22 +86,34 @@ class GameBoard: ObservableObject, Codable {
         spawnPiece()
     }
 
+    func setupGame(mode: GameMode, difficulty: DifficultyPreset) {
+        self.gameMode = mode
+        self.difficulty = difficulty
+        levelManager.setup(difficulty: difficulty)
+        lastClearWasTetrisOrTSpin = false
+        elapsedTime = 0
+        if let limit = mode.timeLimit {
+            timeRemaining = limit
+        }
+        setupDone = true
+    }
+
     // MARK: - Coding
 
     enum CodingKeys: String, CodingKey {
-        case grid, score, level, linesCleared, isGameOver, heldPiece, canHold, stats
+        case grid, score, linesCleared, isGameOver, heldPiece, canHold, stats, levelManager
     }
 
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         grid = try container.decode([[Cell]].self, forKey: .grid)
         score = try container.decode(Int.self, forKey: .score)
-        level = try container.decode(Int.self, forKey: .level)
         linesCleared = try container.decode(Int.self, forKey: .linesCleared)
         isGameOver = try container.decode(Bool.self, forKey: .isGameOver)
         heldPiece = try container.decodeIfPresent(TetrominoType.self, forKey: .heldPiece)
         canHold = try container.decode(Bool.self, forKey: .canHold)
         stats = (try? container.decode(GameStats.self, forKey: .stats)) ?? GameStats()
+        levelManager = (try? container.decode(LevelManager.self, forKey: .levelManager)) ?? LevelManager()
         currentPiece = nil
         pieceQueue = []
     }
@@ -87,12 +122,18 @@ class GameBoard: ObservableObject, Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(grid, forKey: .grid)
         try container.encode(score, forKey: .score)
-        try container.encode(level, forKey: .level)
         try container.encode(linesCleared, forKey: .linesCleared)
         try container.encode(isGameOver, forKey: .isGameOver)
         try container.encode(heldPiece, forKey: .heldPiece)
         try container.encode(canHold, forKey: .canHold)
         try container.encode(stats, forKey: .stats)
+        try container.encode(levelManager, forKey: .levelManager)
+    }
+
+    // MARK: - Level (computed from LevelManager)
+
+    var level: Int {
+        levelManager.currentLevel
     }
 
     // MARK: - Piece Bag (7-bag randomizer)
@@ -168,6 +209,7 @@ class GameBoard: ObservableObject, Codable {
         piece.col -= 1
         if isValidPosition(piece: piece) {
             currentPiece = piece
+            lastWasRotation = false
             resetLockDelayIfNeeded()
             return true
         }
@@ -180,6 +222,7 @@ class GameBoard: ObservableObject, Codable {
         piece.col += 1
         if isValidPosition(piece: piece) {
             currentPiece = piece
+            lastWasRotation = false
             resetLockDelayIfNeeded()
             return true
         }
@@ -192,6 +235,7 @@ class GameBoard: ObservableObject, Codable {
         piece.row += 1
         if isValidPosition(piece: piece) {
             currentPiece = piece
+            lastWasRotation = false
             isLocking = false
             lockDelay = 0
             return true
@@ -217,6 +261,8 @@ class GameBoard: ObservableObject, Codable {
             kicked.col += kick.1
             if isValidPosition(piece: kicked) {
                 currentPiece = kicked
+                lastWasRotation = true
+                lastRotationMoved = (kick != (0, 0))
                 resetLockDelayIfNeeded()
                 return true
             }
@@ -241,11 +287,13 @@ class GameBoard: ObservableObject, Codable {
         }
         let impactCol = (minC + maxC) / 2
 
+        // Track drop distance for scoring
         var dropCount = 0
         while moveDown() {
             dropCount += 1
         }
         stats.piecesPlaced += 1
+        score += dropCount * ScoringSystem.hardDropPoint
 
         // Impact ring animation
         dropImpactCol = impactCol
@@ -279,14 +327,14 @@ class GameBoard: ObservableObject, Codable {
     func tickLockDelay(_ dt: TimeInterval) {
         guard isLocking, let _ = currentPiece else { return }
         lockDelay += dt
-        if lockDelay >= GameConstants.lockDelay {
+        if lockDelay >= difficulty.lockDelay {
             stats.piecesPlaced += 1
             lockPiece()
         }
     }
 
     private func resetLockDelayIfNeeded() {
-        if isLocking && stats.piecesPlaced < GameConstants.maxLockResets {
+        if isLocking && stats.piecesPlaced < difficulty.maxLockResets {
             lockDelay = 0
         }
     }
@@ -316,26 +364,82 @@ class GameBoard: ObservableObject, Codable {
             self?.justLockedCells = []
         }
 
-        let cleared = clearLines()
-        updateScore(lines: cleared)
+        // Detect T-spin
+        let (isTSpin, isMiniTSpin) = detectTSpin()
 
-        if cleared >= 2 {
+        let cleared = clearLinesSync()
+
+        // Check perfect clear (board is empty)
+        let isPerfectClear = grid.allSatisfy { row in
+            row.allSatisfy { !$0.filled }
+        }
+
+        // Back-to-back check
+        let isTetris = cleared == 4
+        let isBackToBack = lastClearWasTetrisOrTSpin && (isTetris || isTSpin)
+        if isTetris || isTSpin {
+            lastClearWasTetrisOrTSpin = true
+        } else {
+            lastClearWasTetrisOrTSpin = false
+        }
+
+        // Calculate score
+        let points = ScoringSystem.calculate(
+            linesCleared: cleared,
+            isTSpin: isTSpin,
+            isMiniTSpin: isMiniTSpin,
+            isPerfectClear: isPerfectClear,
+            isBackToBack: isBackToBack,
+            combo: stats.currentCombo,
+            level: levelManager.currentLevel,
+            difficulty: difficulty
+        )
+        score += points
+
+        // Combo tracking
+        if cleared > 0 || isTSpin {
             stats.currentCombo += 1
             stats.longestCombo = max(stats.longestCombo, stats.currentCombo)
-            stats.linesSent += cleared - 1
         } else {
             stats.currentCombo = 0
         }
 
-        if cleared == 4 {
-            stats.tetrisCount += 1
+        // Garbage sent (for multiplayer)
+        let garbage = ScoringSystem.garbageToSend(
+            linesCleared: cleared,
+            isTSpin: isTSpin,
+            isMiniTSpin: isMiniTSpin,
+            isPerfectClear: isPerfectClear,
+            difficulty: difficulty
+        )
+        stats.linesSent += garbage
+
+        // Stats
+        stats.linesClearedTotal += cleared
+        if isTetris { stats.tetrisCount += 1 }
+        if isTSpin { stats.tSpinCount += 1 }
+        if isPerfectClear { stats.perfectClearCount += 1 }
+        if isBackToBack { stats.backToBackCount += 1 }
+
+        // Level progression
+        let leveledUp = levelManager.addLines(cleared)
+        if leveledUp {
+            showLevelUp = true
+            levelUpLevel = levelManager.currentLevel
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.showLevelUp = false
+            }
         }
 
-        stats.linesClearedTotal += cleared
+        // Reset T-spin tracking
+        lastWasRotation = false
+        lastRotationMoved = false
+
         spawnPiece()
     }
 
-    func clearLines() -> Int {
+    /// Synchronous line clear for use inside lockPiece (no animation delay)
+    private func clearLinesSync() -> Int {
         var clearedRows: [Int] = []
         for r in 0..<rows {
             if grid[r].allSatisfy({ $0.filled }) {
@@ -345,12 +449,11 @@ class GameBoard: ObservableObject, Codable {
 
         guard !clearedRows.isEmpty else { return 0 }
 
-        // Start cascade clear animation
+        // Start cascade animation
         lineClearRows = Set(clearedRows)
         clearingCol = 0
         lineClearFlash = true
 
-        // Cascade: clear column by column from left to right
         let totalCols = cols
         var col = 0
         func clearNextCol() {
@@ -361,7 +464,6 @@ class GameBoard: ObservableObject, Codable {
                     clearNextCol()
                 }
             } else {
-                // Actually remove the rows after cascade finishes
                 for row in clearedRows.sorted().reversed() {
                     grid.remove(at: row)
                     grid.insert(Array(repeating: Cell.empty, count: self.cols), at: 0)
@@ -377,19 +479,52 @@ class GameBoard: ObservableObject, Codable {
         return clearedRows.count
     }
 
-    func updateScore(lines: Int) {
-        let points: [Int: Int] = [1: 100, 2: 300, 3: 500, 4: 800]
-        let comboBonus = stats.currentCombo * 50
-        score += ((points[lines] ?? 0) + comboBonus) * level
-        level = (linesCleared / 10) + 1
+    func clearLines() -> Int {
+        return clearLinesSync()
+    }
+
+    // MARK: - T-Spin Detection
+
+    /// Detects if the last move was a T-spin or mini T-spin
+    private func detectTSpin() -> (isTSpin: Bool, isMini: Bool) {
+        guard lastWasRotation, let piece = currentPiece, piece.type == .T else {
+            return (false, false)
+        }
+
+        // Count occupied corners of the T-piece's bounding box
+        let corners = [
+            (piece.row, piece.col),
+            (piece.row, piece.col + 2),
+            (piece.row + 2, piece.col),
+            (piece.row + 2, piece.col + 2)
+        ]
+
+        var occupiedCorners = 0
+        for (r, c) in corners {
+            if r < 0 || r >= rows || c < 0 || c >= cols || grid[r][c].filled {
+                occupiedCorners += 1
+            }
+        }
+
+        // T-spin requires 3+ occupied corners
+        guard occupiedCorners >= 3 else { return (false, false) }
+
+        // Mini T-spin: rotation didn't move (no kick) or only 2 corners occupied at tip
+        if !lastRotationMoved {
+            return (false, true)
+        }
+
+        return (true, false)
     }
 
     // MARK: - Garbage Lines
 
     func addGarbageLines(_ count: Int) {
         guard count > 0 else { return }
+        let adjustedCount = Int(Double(count) * difficulty.garbageMultiplier)
+        guard adjustedCount > 0 else { return }
         let gap = Int.random(in: 0..<cols)
-        for _ in 0..<count {
+        for _ in 0..<adjustedCount {
             grid.removeFirst()
             var garbageRow = Array(repeating: Cell(filled: true, color: .Z), count: cols)
             garbageRow[gap] = Cell.empty
@@ -411,5 +546,18 @@ class GameBoard: ObservableObject, Codable {
 
     func togglePause() {
         isPaused.toggle()
+    }
+
+    // MARK: - Timer Tick (for Sprint/Ultra)
+
+    func tickElapsed(_ dt: TimeInterval) {
+        guard !isPaused, !isGameOver else { return }
+        elapsedTime += dt
+        if let limit = gameMode.timeLimit {
+            timeRemaining = max(0, limit - elapsedTime)
+            if timeRemaining <= 0 {
+                isGameOver = true
+            }
+        }
     }
 }

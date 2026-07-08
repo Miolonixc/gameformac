@@ -3,6 +3,8 @@ import SwiftUI
 struct LobbyView: View {
     @ObservedObject var viewModel: GameViewModel
     @State private var showMenu = true
+    @State private var showModeSelection = false
+    @State private var showDifficultySelection = false
     @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
@@ -11,6 +13,10 @@ struct LobbyView: View {
 
             if showMenu {
                 menuView
+            } else if showModeSelection {
+                modeSelectionView
+            } else if showDifficultySelection {
+                difficultySelectionView
             } else {
                 connectingView
             }
@@ -22,7 +28,7 @@ struct LobbyView: View {
     var menuView: some View {
         let c = theme.colors
         return VStack(spacing: 40) {
-            // Header with theme toggle — glass lens panel
+            // Header with theme toggle
             HStack {
                 Spacer()
                 ThemeToggleButton()
@@ -53,14 +59,16 @@ struct LobbyView: View {
                     .tracking(20)
             }
 
-            // Buttons — all in glass lens style
+            // Buttons
             VStack(spacing: 16) {
                 GlassButton(title: "Single Player", icon: "person.fill", color: c.accentCyan) {
-                    viewModel.startSinglePlayer()
+                    showMenu = false
+                    showModeSelection = true
                 }
 
                 GlassButton(title: "2 Players (Local)", icon: "person.2.fill", color: c.accentGreen) {
-                    viewModel.startLocal2Player()
+                    showMenu = false
+                    showModeSelection = true
                 }
 
                 GlassButton(title: "Find Opponent", icon: "network", color: c.accentPurple) {
@@ -79,7 +87,7 @@ struct LobbyView: View {
                 }
             }
 
-            // Controls info — glass lens panel
+            // Controls info
             GlassHeader(cornerRadius: 16) {
                 VStack(spacing: 12) {
                     HStack(spacing: 32) {
@@ -115,12 +123,178 @@ struct LobbyView: View {
         }
     }
 
+    // MARK: - Mode Selection
+
+    var modeSelectionView: some View {
+        let c = theme.colors
+        return VStack(spacing: 30) {
+            // Top bar
+            GlassHeader(cornerRadius: 0) {
+                HStack {
+                    Button("Back") {
+                        showModeSelection = false
+                        showMenu = true
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(c.textSecondary)
+
+                    Spacer()
+                    ThemeToggleButton()
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+            }
+
+            Spacer()
+
+            VStack(spacing: 8) {
+                Text("SELECT MODE")
+                    .font(.system(size: 28, weight: .light, design: .rounded))
+                    .foregroundStyle(c.textPrimary)
+            }
+
+            // Mode cards
+            VStack(spacing: 16) {
+                ForEach(GameMode.allCases, id: \.self) { mode in
+                    Button(action: {
+                        viewModel.selectedMode = mode
+                        showModeSelection = false
+                        showDifficultySelection = true
+                    }) {
+                        GlassPanel(cornerRadius: 16) {
+                            HStack(spacing: 16) {
+                                Image(systemName: mode.icon)
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(mode == .marathon ? c.accentCyan : mode == .sprint ? c.accentGreen : c.accentOrange)
+                                    .frame(width: 40)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(mode.displayName)
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(c.textPrimary)
+                                    Text(mode.description)
+                                        .font(.system(size: 12, design: .rounded))
+                                        .foregroundStyle(c.textSecondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(c.textMuted)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: 400)
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Difficulty Selection
+
+    var difficultySelectionView: some View {
+        let c = theme.colors
+        return VStack(spacing: 30) {
+            // Top bar
+            GlassHeader(cornerRadius: 0) {
+                HStack {
+                    Button("Back") {
+                        showDifficultySelection = false
+                        showModeSelection = true
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(c.textSecondary)
+
+                    Spacer()
+
+                    Text(viewModel.selectedMode.displayName)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(c.textSecondary)
+
+                    Spacer()
+
+                    ThemeToggleButton()
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+            }
+
+            Spacer()
+
+            VStack(spacing: 8) {
+                Text("SELECT DIFFICULTY")
+                    .font(.system(size: 28, weight: .light, design: .rounded))
+                    .foregroundStyle(c.textPrimary)
+            }
+
+            // Difficulty cards
+            VStack(spacing: 16) {
+                ForEach(DifficultyPreset.allCases, id: \.self) { diff in
+                    Button(action: {
+                        viewModel.selectedDifficulty = diff
+                        showDifficultySelection = false
+
+                        // Start game based on mode
+                        switch viewModel.selectedMode {
+                        case .marathon, .sprint, .ultra:
+                            viewModel.startSinglePlayer(mode: viewModel.selectedMode, difficulty: diff)
+                        }
+                    }) {
+                        GlassPanel(cornerRadius: 16) {
+                            HStack(spacing: 16) {
+                                Image(systemName: diff.icon)
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(diff == .easy ? c.accentGreen : diff == .normal ? c.accentCyan : c.accentRed)
+                                    .frame(width: 40)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(diff.displayName)
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(c.textPrimary)
+                                    Text(diff.description)
+                                        .font(.system(size: 12, design: .rounded))
+                                        .foregroundStyle(c.textSecondary)
+                                }
+
+                                Spacer()
+
+                                // Stats preview
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("Speed: \(String(format: "%.1f", diff.baseSpeed))s")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundStyle(c.textMuted)
+                                    Text("Lines/level: \(diff.linesPerLevel)")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundStyle(c.textMuted)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: 400)
+                }
+            }
+
+            Spacer()
+        }
+    }
+
     // MARK: - Connecting
 
     var connectingView: some View {
         let c = theme.colors
         return VStack(spacing: 30) {
-            // Top bar — glass lens panel
+            // Top bar
             GlassHeader(cornerRadius: 0) {
                 HStack {
                     Button("Back") {
@@ -172,7 +346,7 @@ struct LobbyView: View {
                 }
             }
 
-            // Peer list — glass panel
+            // Peer list
             if !viewModel.network.discoveredPeers.isEmpty {
                 GlassPanel(cornerRadius: 16) {
                     VStack(spacing: 8) {
@@ -196,7 +370,7 @@ struct LobbyView: View {
                 .frame(maxWidth: 300)
             }
 
-            // Start button — glass lens button
+            // Start button
             if viewModel.network.connectionState == .hosting {
                 GlassButton(title: "Start Game", icon: "play.fill", color: c.accentGreen) {
                     viewModel.startMultiplayerGame()

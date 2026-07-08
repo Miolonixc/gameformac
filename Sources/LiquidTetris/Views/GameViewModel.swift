@@ -13,6 +13,10 @@ class GameViewModel: ObservableObject {
     @Published var showResult = false
     @Published var resultMessage = ""
 
+    // Mode & difficulty
+    @Published var selectedMode: GameMode = .marathon
+    @Published var selectedDifficulty: DifficultyPreset = .normal
+
     let network = NetworkManager.shared
     private var dropTimer1: Timer?
     private var dropTimer2: Timer?
@@ -145,21 +149,28 @@ class GameViewModel: ObservableObject {
 
     // MARK: - Single Player
 
-    func startSinglePlayer() {
+    func startSinglePlayer(mode: GameMode = .marathon, difficulty: DifficultyPreset = .normal) {
+        selectedMode = mode
+        selectedDifficulty = difficulty
         isMultiplayer = false
         isLocal2P = false
         playerBoard = GameBoard()
         player2Board = GameBoard()
+        playerBoard.setupGame(mode: mode, difficulty: difficulty)
         startGame(isMultiplayer: false)
     }
 
     // MARK: - Local 2 Player
 
-    func startLocal2Player() {
+    func startLocal2Player(mode: GameMode = .marathon, difficulty: DifficultyPreset = .normal) {
+        selectedMode = mode
+        selectedDifficulty = difficulty
         isMultiplayer = false
         isLocal2P = true
         playerBoard = GameBoard()
         player2Board = GameBoard()
+        playerBoard.setupGame(mode: mode, difficulty: difficulty)
+        player2Board.setupGame(mode: mode, difficulty: difficulty)
         startGame(isMultiplayer: false)
     }
 
@@ -191,10 +202,17 @@ class GameViewModel: ObservableObject {
         self.isMultiplayer = isMultiplayer
         gameStarted = true
         isPaused = false
-        playerBoard = GameBoard()
+
+        if !playerBoard.setupDone {
+            playerBoard = GameBoard()
+            playerBoard.setupGame(mode: selectedMode, difficulty: selectedDifficulty)
+        }
 
         if isLocal2P {
-            player2Board = GameBoard()
+            if !player2Board.setupDone {
+                player2Board = GameBoard()
+                player2Board.setupGame(mode: selectedMode, difficulty: selectedDifficulty)
+            }
         }
 
         startPhysicsTimer()
@@ -207,18 +225,23 @@ class GameViewModel: ObservableObject {
 
     private func startDropTimer() {
         dropTimer1?.invalidate()
-        let interval1 = max(0.1, GameConstants.dropInterval - Double(playerBoard.level - 1) * GameConstants.levelSpeedup)
+        let interval1 = playerBoard.levelManager.dropInterval(for: selectedDifficulty)
         dropTimer1 = Timer.scheduledTimer(withTimeInterval: interval1, repeats: true) { [weak self] _ in
             self?.tickPlayer1()
         }
 
         if isLocal2P {
             dropTimer2?.invalidate()
-            let interval2 = max(0.1, GameConstants.dropInterval - Double(player2Board.level - 1) * GameConstants.levelSpeedup)
+            let interval2 = player2Board.levelManager.dropInterval(for: selectedDifficulty)
             dropTimer2 = Timer.scheduledTimer(withTimeInterval: interval2, repeats: true) { [weak self] _ in
                 self?.tickPlayer2()
             }
         }
+    }
+
+    /// Restarts drop timer with current level speed (called after level-up)
+    func refreshDropTimer() {
+        startDropTimer()
     }
 
     private func startPhysicsTimer() {
@@ -237,11 +260,35 @@ class GameViewModel: ObservableObject {
 
     func physicsTick() {
         guard !isPaused else { return }
+        let dt = 1.0 / 60.0
+
         if !playerBoard.isGameOver {
-            playerBoard.tickLockDelay(1.0 / 60.0)
+            playerBoard.tickLockDelay(dt)
+            playerBoard.tickElapsed(dt)
+
+            // Sprint: check line target
+            if selectedMode == .sprint, let target = selectedMode.targetLines,
+               playerBoard.linesCleared >= target {
+                gameOver(won: true, message: "SPRINT COMPLETE!")
+                return
+            }
+
+            // Ultra: check time up
+            if selectedMode == .ultra, playerBoard.timeRemaining <= 0 {
+                gameOver(won: true, message: "TIME'S UP!")
+                return
+            }
+
+            // Check if level changed and refresh drop timer
+            let currentInterval = playerBoard.levelManager.dropInterval(for: selectedDifficulty)
+            if dropTimer1?.timeInterval != currentInterval {
+                startDropTimer()
+            }
         }
+
         if isLocal2P && !player2Board.isGameOver {
-            player2Board.tickLockDelay(1.0 / 60.0)
+            player2Board.tickLockDelay(dt)
+            player2Board.tickElapsed(dt)
         }
     }
 
@@ -280,11 +327,14 @@ class GameViewModel: ObservableObject {
     private func startDAS(player: Int, direction: DasDirection) {
         stopDAS(player: player)
 
+        let delay = selectedDifficulty.dasDelay
+        let repeatInterval = selectedDifficulty.dasRepeat
+
         if player == 1 {
             das1Direction = direction
-            das1Timer = Timer.scheduledTimer(withTimeInterval: GameConstants.dasDelay, repeats: false) { [weak self] _ in
+            das1Timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
-                self.das1Timer = Timer.scheduledTimer(withTimeInterval: GameConstants.dasRepeat, repeats: true) { [weak self] _ in
+                self.das1Timer = Timer.scheduledTimer(withTimeInterval: repeatInterval, repeats: true) { [weak self] _ in
                     guard let self = self, !self.isPaused else { return }
                     switch self.das1Direction {
                     case .left: self.playerBoard.moveLeft()
@@ -295,9 +345,9 @@ class GameViewModel: ObservableObject {
             }
         } else {
             das2Direction = direction
-            das2Timer = Timer.scheduledTimer(withTimeInterval: GameConstants.dasDelay, repeats: false) { [weak self] _ in
+            das2Timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
-                self.das2Timer = Timer.scheduledTimer(withTimeInterval: GameConstants.dasRepeat, repeats: true) { [weak self] _ in
+                self.das2Timer = Timer.scheduledTimer(withTimeInterval: repeatInterval, repeats: true) { [weak self] _ in
                     guard let self = self, !self.isPaused else { return }
                     switch self.das2Direction {
                     case .left: self.player2Board.moveLeft()
@@ -343,7 +393,6 @@ class GameViewModel: ObservableObject {
             guard let self = self else { return }
             self.player2Board.grid = state.grid
             self.player2Board.score = state.score
-            self.player2Board.level = state.level
             self.player2Board.linesCleared = state.linesCleared
             self.player2Board.isGameOver = state.isGameOver
         }
@@ -361,7 +410,18 @@ class GameViewModel: ObservableObject {
         gameStarted = false
         isPaused = false
         showResult = true
-        resultMessage = message ?? (won ? "YOU WIN!" : "GAME OVER")
+
+        if let msg = message {
+            resultMessage = msg
+        } else if won {
+            resultMessage = "YOU WIN!"
+        } else {
+            switch selectedMode {
+            case .marathon: resultMessage = "GAME OVER"
+            case .sprint: resultMessage = "TIME'S UP!"
+            case .ultra: resultMessage = "TIME'S UP!"
+            }
+        }
     }
 
     // MARK: - Cleanup

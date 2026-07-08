@@ -22,7 +22,7 @@ struct LobbyView: View {
     var menuView: some View {
         let c = theme.colors
         return VStack(spacing: 40) {
-            // Header with theme toggle
+            // Header with theme toggle — glass lens panel
             HStack {
                 Spacer()
                 ThemeToggleButton()
@@ -53,7 +53,7 @@ struct LobbyView: View {
                     .tracking(20)
             }
 
-            // Buttons
+            // Buttons — all in glass lens style
             VStack(spacing: 16) {
                 GlassButton(title: "Single Player", icon: "person.fill", color: c.accentCyan) {
                     viewModel.startSinglePlayer()
@@ -79,8 +79,8 @@ struct LobbyView: View {
                 }
             }
 
-            // Controls info
-            GlassPanel(cornerRadius: 16) {
+            // Controls info — glass lens panel
+            GlassHeader(cornerRadius: 16) {
                 VStack(spacing: 12) {
                     HStack(spacing: 32) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -120,20 +120,23 @@ struct LobbyView: View {
     var connectingView: some View {
         let c = theme.colors
         return VStack(spacing: 30) {
-            // Top bar
-            HStack {
-                Button("Back") {
-                    viewModel.stopAll()
-                    showMenu = true
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(c.textSecondary)
+            // Top bar — glass lens panel
+            GlassHeader(cornerRadius: 0) {
+                HStack {
+                    Button("Back") {
+                        viewModel.stopAll()
+                        showMenu = true
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(c.textSecondary)
 
-                Spacer()
-                ThemeToggleButton()
+                    Spacer()
+                    ThemeToggleButton()
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 40)
-            .padding(.top, 20)
 
             Spacer()
 
@@ -169,7 +172,7 @@ struct LobbyView: View {
                 }
             }
 
-            // Peer list
+            // Peer list — glass panel
             if !viewModel.network.discoveredPeers.isEmpty {
                 GlassPanel(cornerRadius: 16) {
                     VStack(spacing: 8) {
@@ -193,7 +196,7 @@ struct LobbyView: View {
                 .frame(maxWidth: 300)
             }
 
-            // Start button (when host)
+            // Start button — glass lens button
             if viewModel.network.connectionState == .hosting {
                 GlassButton(title: "Start Game", icon: "play.fill", color: c.accentGreen) {
                     viewModel.startMultiplayerGame()

@@ -10,6 +10,21 @@ struct GameBoardView: View {
     @State private var ringScales: [CGFloat] = [0, 0, 0]
     @State private var ringOpacities: [Double] = [0, 0, 0]
 
+    // Line clear sweep animation
+    @State private var sweepProgress: CGFloat = 0
+    @State private var sweepActive: Bool = false
+
+    // T-spin ring animation
+    @State private var tSpinRingScale: CGFloat = 0
+    @State private var tSpinRingOpacity: Double = 0
+
+    // Tetris flash
+    @State private var tetrisFlashOpacity: Double = 0
+
+    // Perfect clear
+    @State private var perfectClearScale: CGFloat = 0.5
+    @State private var perfectClearOpacity: Double = 0
+
     private let cellSize = GameConstants.cellSize
 
     var body: some View {
@@ -26,6 +41,26 @@ struct GameBoardView: View {
         )
         .overlay(gameOverOverlay)
         .overlay(comboOverlay, alignment: .topTrailing)
+        .overlay(tSpinOverlay, alignment: .center)
+        .overlay(tetrisFlashOverlay)
+        .overlay(perfectClearOverlay, alignment: .center)
+        .overlay(particleOverlay)
+        .onChange(of: board.hardDropFlash) { _, flash in
+            guard flash else { return }
+            triggerDropEffects()
+        }
+        .onChange(of: board.lineClearCount) { _, count in
+            guard count > 0 else { return }
+            triggerLineClearSweep(count: count)
+        }
+        .onChange(of: board.showTSpinOverlay) { _, show in
+            guard show else { return }
+            triggerTSpinEffect()
+        }
+        .onChange(of: board.showTetrisFlash) { _, show in
+            guard show else { return }
+            triggerTetrisFlash()
+        }
     }
 
     // MARK: - Header
@@ -64,11 +99,8 @@ struct GameBoardView: View {
         .padding(4)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(impactRingsOverlay)
+        .overlay(lineClearSweepOverlay)
         .offset(y: dropShake)
-        .onChange(of: board.hardDropFlash) { _, flash in
-            guard flash else { return }
-            triggerDropEffects()
-        }
     }
 
     // MARK: - Cell
@@ -92,6 +124,48 @@ struct GameBoardView: View {
         )
     }
 
+    // MARK: - Line Clear Sweep Overlay
+
+    private var lineClearSweepOverlay: some View {
+        GeometryReader { geo in
+            if sweepActive {
+                let boardWidth = geo.size.width
+                let sweepX = sweepProgress * boardWidth
+
+                // Vertical sweep line
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .white.opacity(0.6),
+                                .white.opacity(0.9),
+                                .white.opacity(0.6),
+                                .clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: boardWidth * 0.15)
+                    .position(x: sweepX, y: geo.size.height / 2)
+                    .blendMode(.screen)
+
+                // Horizontal flash bars on cleared rows
+                ForEach(Array(board.lineClearRows), id: \.self) { row in
+                    let rowY = CGFloat(row) * cellSize + cellSize / 2 + 4
+                    Rectangle()
+                        .fill(.white.opacity(0.3))
+                        .frame(height: cellSize)
+                        .position(x: geo.size.width / 2, y: rowY)
+                        .opacity(sweepProgress > 0 ? 1 : 0)
+                        .animation(.easeOut(duration: 0.2), value: sweepProgress)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
     // MARK: - Impact Rings
 
     private var impactRingsOverlay: some View {
@@ -113,6 +187,118 @@ struct GameBoardView: View {
                 }
                 .allowsHitTesting(false)
             }
+        }
+    }
+
+    // MARK: - T-Spin Overlay
+
+    private var tSpinOverlay: some View {
+        let c = theme.colors
+        return Group {
+            if board.showTSpinOverlay {
+                ZStack {
+                    // Spinning ring
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [c.accentPurple, c.accentCyan, c.accentPurple],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 3
+                        )
+                        .frame(width: 120 + tSpinRingScale * 60, height: 120 + tSpinRingScale * 60)
+                        .opacity(tSpinRingOpacity)
+                        .rotationEffect(.degrees(tSpinRingScale * 360))
+
+                    // T-Spin text
+                    VStack(spacing: 4) {
+                        Text(board.tSpinIsMini ? "T-SPIN MINI" : "T-SPIN")
+                            .font(.system(size: board.tSpinIsMini ? 16 : 22, weight: .black, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [c.accentPurple, c.accentCyan],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+
+                        if board.tSpinLinesCleared > 0 {
+                            Text(board.tSpinLinesCleared == 1 ? "SINGLE" :
+                                    board.tSpinLinesCleared == 2 ? "DOUBLE" : "TRIPLE")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundStyle(c.accentYellow)
+                        }
+                    }
+                    .scaleEffect(tSpinRingScale > 0.5 ? 1.0 : 0.5)
+                    .opacity(tSpinRingOpacity)
+                }
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    // MARK: - Tetris Flash Overlay
+
+    private var tetrisFlashOverlay: some View {
+        Group {
+            if tetrisFlashOpacity > 0 {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.white.opacity(tetrisFlashOpacity * 0.4))
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    // MARK: - Perfect Clear Overlay
+
+    private var perfectClearOverlay: some View {
+        let c = theme.colors
+        return Group {
+            if perfectClearOpacity > 0 {
+                VStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 40))
+                        .foregroundStyle(c.accentYellow)
+                    Text("PERFECT CLEAR")
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [c.accentYellow, c.accentCyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    Text("+3000")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundStyle(c.accentGreen)
+                }
+                .scaleEffect(perfectClearScale)
+                .opacity(perfectClearOpacity)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    // MARK: - Particle Overlay
+
+    private var particleOverlay: some View {
+        GeometryReader { geo in
+            ZStack {
+                ForEach(board.particles) { particle in
+                    Circle()
+                        .fill(particle.color)
+                        .frame(width: particle.size, height: particle.size)
+                        .position(
+                            x: particle.x + 16,
+                            y: particle.y + 16
+                        )
+                        .opacity(particle.opacity)
+                        .blur(radius: particle.size > 4 ? 1 : 0)
+                }
+            }
+            .allowsHitTesting(false)
         }
     }
 
@@ -226,6 +412,56 @@ struct GameBoardView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             ringScales = [0, 0, 0]
             ringOpacities = [0, 0, 0]
+        }
+    }
+
+    private func triggerLineClearSweep(count: Int) {
+        sweepActive = true
+        sweepProgress = 0
+
+        // Sweep across the board
+        withAnimation(.easeInOut(duration: 0.35)) {
+            sweepProgress = 1.0
+        }
+
+        // Tetris flash for 4 lines
+        if count >= 4 {
+            withAnimation(.easeIn(duration: 0.05)) { tetrisFlashOpacity = 1.0 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.easeOut(duration: 0.25)) { tetrisFlashOpacity = 0 }
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            sweepActive = false
+            sweepProgress = 0
+        }
+    }
+
+    private func triggerTSpinEffect() {
+        // Ring animation
+        withAnimation(.easeOut(duration: 0.3)) {
+            tSpinRingScale = 1.0
+            tSpinRingOpacity = 1.0
+        }
+
+        // Fade out
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeIn(duration: 0.3)) {
+                tSpinRingOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            tSpinRingScale = 0
+            tSpinRingOpacity = 0
+        }
+    }
+
+    private func triggerTetrisFlash() {
+        withAnimation(.easeIn(duration: 0.05)) { tetrisFlashOpacity = 1.0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.easeOut(duration: 0.3)) { tetrisFlashOpacity = 0 }
         }
     }
 

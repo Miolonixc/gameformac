@@ -29,6 +29,21 @@ struct GameStats: Codable {
     }
 }
 
+// MARK: - Line Clear Particle
+
+struct LineParticle: Identifiable {
+    let id: Int
+    var x: CGFloat
+    var y: CGFloat
+    var vx: CGFloat
+    var vy: CGFloat
+    var color: Color
+    var size: CGFloat
+    var opacity: Double
+    var lifetime: TimeInterval
+    var age: TimeInterval = 0
+}
+
 // MARK: - GameBoard
 
 class GameBoard: ObservableObject, Codable {
@@ -70,6 +85,20 @@ class GameBoard: ObservableObject, Codable {
     @Published var dropImpactColor: Color = .clear
     @Published var justLockedCells: [(row: Int, col: Int)] = []
     @Published var clearingCol: Int = -1
+
+    // Line clear effects
+    @Published var lineClearCount: Int = 0
+    @Published var showTetrisFlash: Bool = false
+    @Published var lineClearCenterCol: Int = -1
+
+    // T-spin effects
+    @Published var showTSpinOverlay: Bool = false
+    @Published var tSpinIsMini: Bool = false
+    @Published var tSpinLinesCleared: Int = 0
+
+    // Particle effects
+    @Published var particles: [LineParticle] = []
+    private var particleIdCounter: Int = 0
 
     // Level-up animation
     @Published var showLevelUp: Bool = false
@@ -421,6 +450,38 @@ class GameBoard: ObservableObject, Codable {
         if isPerfectClear { stats.perfectClearCount += 1 }
         if isBackToBack { stats.backToBackCount += 1 }
 
+        // Visual effects
+        if cleared > 0 {
+            lineClearCount = cleared
+            lineClearCenterCol = cols / 2
+            spawnLineClearParticles(rows: Array(lineClearRows), cleared: cleared)
+
+            if isTetris {
+                showTetrisFlash = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    self?.showTetrisFlash = false
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.lineClearCount = 0
+                self?.lineClearCenterCol = -1
+            }
+        }
+
+        if isTSpin {
+            showTSpinOverlay = true
+            tSpinIsMini = isMiniTSpin
+            tSpinLinesCleared = cleared
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                self?.showTSpinOverlay = false
+            }
+        }
+
+        if isPerfectClear {
+            spawnPerfectClearParticles()
+        }
+
         // Level progression
         let leveledUp = levelManager.addLines(cleared)
         if leveledUp {
@@ -558,6 +619,73 @@ class GameBoard: ObservableObject, Codable {
             if timeRemaining <= 0 {
                 isGameOver = true
             }
+        }
+    }
+
+    // MARK: - Particle Effects
+
+    private func spawnLineClearParticles(rows: [Int], cleared: Int) {
+        let cellSize = GameConstants.cellSize
+        let colors: [Color] = [.cyan, .white, .yellow, .orange, .purple]
+        let count = cleared * 12
+
+        for _ in 0..<count {
+            let row = rows.randomElement() ?? rows[0]
+            let col = Int.random(in: 0..<cols)
+            let x = CGFloat(col) * cellSize + cellSize / 2
+            let y = CGFloat(row) * cellSize + cellSize / 2
+            let angle = Double.random(in: 0...(2 * .pi))
+            let speed = CGFloat.random(in: 2...6)
+
+            let particle = LineParticle(
+                id: particleIdCounter,
+                x: x, y: y,
+                vx: cos(angle) * speed,
+                vy: sin(angle) * speed - 2,
+                color: colors.randomElement() ?? .white,
+                size: CGFloat.random(in: 2...5),
+                opacity: 1.0,
+                lifetime: TimeInterval.random(in: 0.3...0.6)
+            )
+            particles.append(particle)
+            particleIdCounter += 1
+        }
+
+        // Auto-cleanup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            self?.particles.removeAll()
+        }
+    }
+
+    private func spawnPerfectClearParticles() {
+        let cellSize = GameConstants.cellSize
+        let colors: [Color] = [.yellow, .white, .cyan, .purple]
+        let count = 40
+
+        for _ in 0..<count {
+            let col = Int.random(in: 0..<cols)
+            let row = Int.random(in: 0..<rows)
+            let x = CGFloat(col) * cellSize + cellSize / 2
+            let y = CGFloat(row) * cellSize + cellSize / 2
+            let angle = Double.random(in: 0...(2 * .pi))
+            let speed = CGFloat.random(in: 3...8)
+
+            let particle = LineParticle(
+                id: particleIdCounter,
+                x: x, y: y,
+                vx: cos(angle) * speed,
+                vy: sin(angle) * speed - 3,
+                color: colors.randomElement() ?? .yellow,
+                size: CGFloat.random(in: 3...6),
+                opacity: 1.0,
+                lifetime: TimeInterval.random(in: 0.4...0.8)
+            )
+            particles.append(particle)
+            particleIdCounter += 1
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+            self?.particles.removeAll()
         }
     }
 }

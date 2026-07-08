@@ -327,12 +327,15 @@ struct GlassCell: View {
                     .strokeBorder(cellStroke(colors: c), lineWidth: isActive ? 1.5 : 0.5)
             )
             .shadow(color: (color ?? .clear).opacity(filled ? (isActive ? 0.8 : 0.4) : 0), radius: isActive ? 6 : 3, x: 0, y: 1)
-            .brightness(isClearing ? 0.6 : (isJustLocked ? 0.4 : (isActive ? 0.15 : 0)))
+            .brightness(isClearing ? 0.8 : (isJustLocked ? 0.4 : (isActive ? 0.15 : 0)))
+            .overlay(
+                isClearing ? RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.4)) : nil
+            )
             .overlay(
                 isJustLocked ? RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.25)) : nil
             )
-            .scaleEffect(isClearing ? 1.05 : (isJustLocked ? 1.08 : 1.0))
-            .animation(.easeOut(duration: 0.1), value: isClearing)
+            .scaleEffect(isClearing ? 1.12 : (isJustLocked ? 1.08 : 1.0))
+            .animation(.easeOut(duration: 0.08), value: isClearing)
             .animation(.easeOut(duration: 0.15), value: isJustLocked)
     }
 
@@ -340,7 +343,7 @@ struct GlassCell: View {
         if isClearing, let color = color {
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [.white, color, color.opacity(0.5)],
+                    colors: [.white, color.opacity(1.2), color],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
